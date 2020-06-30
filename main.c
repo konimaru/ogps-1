@@ -91,12 +91,36 @@ ubus_connect_handler(struct ubus_context *ctx)
 		fprintf(stderr, "Failed to add object: %s\n", ubus_strerror(ret));
 }
 
+struct speed_map
+{
+	speed_t  speed;
+	uint32_t baud;
+};
+
+static speed_t
+cnv_baud(uint32_t baud)
+{
+	static const struct speed_map speeds[] =
+	{
+		{ B4800,     4800}, { B9600,     9600},
+		{ B19200,   19200}, { B38400,   38400},
+		{ B57600,   57600}, { B115200, 115200},
+	};
+
+	for (unsigned i = 0; i < sizeof(speeds)/sizeof(struct speed_map); i++)
+		if (baud == speeds[i].baud)
+			return speeds[i].speed;
+
+	return B4800;
+}
+
 static int
 usage(const char *prog)
 {
 	fprintf(stderr, "Usage: %s [options] <device>\n"
 		"Options:\n"
 		"	-a		Adjust system clock from gps\n"
+		"	-b <baudrate>	Device speed (4800..115200)\n"
 		"	-s <path>	Path to ubus socket\n"
 		"	-d <level>	Enable debug messages\n"
 		"	-S		Print messages to stdout\n"
@@ -111,6 +135,7 @@ main(int argc, char ** argv)
 	char *device = NULL;
 	char *dbglvl = getenv("DBGLVL");
 	int ulog_channels = ULOG_KMSG;
+	uint32_t baudrate = 4800;
 
 	signal(SIGPIPE, SIG_IGN);
 
@@ -119,10 +144,13 @@ main(int argc, char ** argv)
 		unsetenv("DBGLVL");
 	}
 
-	while ((ch = getopt(argc, argv, "ad:s:S")) != -1) {
+	while ((ch = getopt(argc, argv, "ab:d:s:S")) != -1) {
 		switch (ch) {
 		case 'a':
 			adjust_clock = -1;
+			break;
+		case 'b':
+			baudrate = atoi(optarg);
 			break;
 		case 's':
 			ubus_socket = optarg;
@@ -151,7 +179,7 @@ main(int argc, char ** argv)
 	conn.cb = ubus_connect_handler;
 	ubus_auto_connect(&conn);
 
-	if (nmea_open(device, &stream, B4800) < 0)
+	if (nmea_open(device, &stream, cnv_baud(baudrate)) < 0)
 		return -1;
 
 	uloop_run();

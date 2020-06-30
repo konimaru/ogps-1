@@ -232,7 +232,8 @@ nmea_process(char *a)
 	char *csum;
 	int cnt, i;
 
-	if (strncmp(a, "$GP", 3))
+    /* assuming "$??,*CS" as minimum */
+    if ((strlen(a) < 7) || a[0] != '$')
 		return;
 
 	a++;
